@@ -1,97 +1,73 @@
-import urllib
-import re
-import os
 
-def get_picture_with_time(subdomain, start=0, chunk=50, resolution=1280) :
-	api_url = 'http://#subdomain#.tumblr.com/api/read?type=photo&num=#chunk#&start=#start#'
-	api_url = api_url.replace("#subdomain#", subdomain)
-	api_url = api_url.replace("#chunk#", str(50))
-	api_url = api_url.replace("#start#", str(start))
+# Authenticate via API Key 'p71Lr3B68z5H7AWMF95cbfZz08Kp7WexlgUwoEv2BmRGwowxVa'
+# Example timestamp: before=1346822071
 
-	site = api_url
-	file = urllib.urlopen(site)
-	data = file.read()
+from bs4 import BeautifulSoup
+import urllib2
+import json
+import requests
+import sys
+import csv
 
-	#regex_pic_with_time = ur"<post id=(.+?)date-gmt=\"(.+?)\" date=(.+?)<photo-url max-width=\"" + "1280" + "\">(.+?)</photo-url>(.+?)</post>"
-	
-	regex_post = ur"<post id=(.+?)</post>"
-	post_list = re.findall(regex_post, data)
-	
-	#only download images of the certain resolution
-	regex_image = ur"<photo-url max-width=\"" + str(resolution) + "\">(.+?)</photo-url>"
-	regex_time = ur"date-gmt=\"(.+?) GMT\""
-	regex_tag = ur"<tag>(.+?)</tag>"
-	
-	picture_with_time_list = []
+tag = ""
+limit = ""
+before = ""
+content = []
+latestTimestamp = ""
+count = 0
 
-	for post in post_list :
-		image_list = re.findall(regex_image, post)
-		time = re.findall(regex_time, post)
-		tag_list = re.findall(regex_tag, post)
-		for image in image_list :
-			picture_with_time_list.append([time[0], tag_list, image])
-	file.close()
+def get_user_params():
+	global tag
+	global limit
+	global before
+	while (tag == ""):
+		tag = raw_input("What tag would you like to scrape? ")
+	while (limit == ""):
+		limit = raw_input("How many posts would you like to scrape?  " )
+	while (before == ""):
+		before = raw_input("Would you like to include a time constraint? (to use current date, enter 0) ")
 
-	return picture_with_time_list
-
-def save_record(subdomain, record) :
-	fname = subdomain + "_" + "record.txt"
-	file =open(fname,'w')
-	file.write(str(record))
-	file.close()
-
-def download_images(subdomain, record) :
-	if not os.path.exists(subdomain):
-	 		os.makedirs(subdomain)
-	image_list = [each_record[2] for each_record in record]
-	print "Start downloading images from " + subdomain + "......"
-	for each in image_list:
-		name = each.split('/')[-1]
-		if len(name) > 35 :
-			name = name[(len(name)-35):]
-		print name
-		dest = os.path.join(subdomain, name)
-		print "Downloading " + name + "......"
-		urllib.urlretrieve(each, dest)
-	print "All the images are saved."
-
-	
-def get_all_images(subdomain) :
-	api_url = 'http://#subdomain#.tumblr.com/api/read?type=photo&num=#chunk#&start=0'
-	api_url = api_url.replace("#subdomain#", subdomain)
-	api_url = api_url.replace("#chunk#", str(50))
-
-	site = api_url
-	file = urllib.urlopen(site)
-	data = file.read()
-	file.close()
-
-	#### all the images on the page
-	regex_image   = ur"<photo-url max-width=\"" + "1280" + "\">(.+?)</photo-url>"
-	image_list = re.findall(regex_image, data)
-	return len(image_list)
-
-
-def tumblr_scraper(subdomain, chunk=50, start=0, resolution=1280) :
-	total = get_all_images(subdomain)
-	start_point = 0
-	record = []
-	while True :
-		data = get_picture_with_time(subdomain, start_point, chunk, resolution)
-		if not data :
+def scrape_image_captions():
+	global tag
+	global limit
+	global before
+	global count
+	url = 'https://api.tumblr.com/v2/tagged?tag='+ tag +'&limit='+ limit +'&api_key=p71Lr3B68z5H7AWMF95cbfZz08Kp7WexlgUwoEv2BmRGwowxVa'
+	if before != '0':
+		url += '&before=' + before
+		latestTimestamp = before
+	urlLoaded = urllib2.urlopen(url)
+	data = json.load(urlLoaded)
+	for item in data['response']:
+		count += 1
+		if count > limit:
 			break
-		for post in data :
-			record.append(post)
-		total -= len(data)
-		if total <= 0 :
-			break
-		start_point += chunk
-	### write record to a file
-	save_record(subdomain, record)
-	### download images to a certain folder
-	download_images(subdomain, record)
+		latestTimestamp = item['timestamp']
+		if 'image_permalink' in item:
+			i = item['trail']
+			for val in i:
+				if 'content_raw' in val:
+					c = val['content_raw']
+					soup = BeautifulSoup(c, "lxml")
+					soup = soup.get_text()
+					content.append([item['timestamp'], item['date'], soup.encode('ascii', 'ignore')])
+				else:
+					content.append([item['timestamp'], item['date'], ""])
+	print count
+	if count < int(limit):
+		before = str(latestTimestamp)
+		scrape_image_captions()
+	print latestTimestamp
 
+def write_to_csv(content):
+	with open(tag + ".csv", 'a') as csvfile:
+	    wr = csv.writer(csvfile, delimiter=',')
+	    for c in content:
+	    	wr.writerow(c)
 
+def main():
+	get_user_params()
+	scrape_image_captions()
+	write_to_csv(content)
 
-###tumblr_scraper("#enter the subdomain here#")
-
+main()
