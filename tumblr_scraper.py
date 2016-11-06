@@ -1,6 +1,7 @@
 import urllib
 import re
 import os
+import csv
 
 def get_picture_with_time(subdomain, start=0, chunk=50, resolution=1280) :
 	api_url = 'http://#subdomain#.tumblr.com/api/read?type=photo&num=#chunk#&start=#start#'
@@ -91,6 +92,35 @@ def tumblr_scraper(subdomain, chunk=50, start=0, resolution=1280) :
 	### download images to a certain folder
 	download_images(subdomain, record)
 
+def read_col(filename, mark) :
+	with open(filename + "/" + mark + ".csv",'rb') as csvfile:
+		reader = csv.reader(csvfile)
+		column = [row[0] for row in reader]
+	return column
 
 
-###tumblr_scraper("#enter the subdomain here#")
+def download_url(filename, mark) :
+	post_list = read_col(filename, mark)
+	image_list = post_to_image(post_list)
+	print "Start downloading images from " + filename + "......"
+	for each in image_list:
+		name = each.split('/')[-1]
+		if len(name) > 35 :
+			name = name[(len(name)-35):]
+		dest = os.path.join(filename, name)
+		print "Downloading " + name + "......"
+		urllib.urlretrieve(each, dest)
+	print "All the images are saved."
+
+def post_to_image(post_list) :
+	image_list = []
+	for url in post_list :
+		site = url
+		file = urllib.urlopen(site)
+		data = file.read()
+		regex_image = ur"<img id=(.+?)data-src=\"(.+?)\" data-height=(.+?)data-width=(.+?)>"
+		image = re.findall(regex_image, data)
+		image_list.append(image[0][1])
+	return image_list
+
+
