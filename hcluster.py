@@ -135,10 +135,10 @@ def getdepth(clust):
       
 from PIL import Image,ImageDraw
  
-def drawdendrogram(clust,imlist,jpeg='clusters.jpg'):
+def drawdendrogram(clust,imlist,jpeg='clusters.png', thumbsize=100, fillc=(60,60,60)):
     # height and width
-    h=getheight(clust)*20
-    w=1200
+    h=getheight(clust)*thumbsize
+    w=2400
     depth=getdepth(clust)
     
     # width is fixed, so scale distances accordingly
@@ -148,35 +148,35 @@ def drawdendrogram(clust,imlist,jpeg='clusters.jpg'):
     img=Image.new('RGB',(w,h),(255,255,255))
     draw=ImageDraw.Draw(img)
     
-    draw.line((0,h/2,10,h/2),fill=(255,0,0))    
+    draw.line((0,h/2,10,h/2),fill=fillc)    
     
     # Draw the first node
-    drawnode(draw,clust,10,(h/2),scaling,imlist,img)
-    img.save(jpeg)
+    drawnode(draw,clust,10,(h/2),scaling,imlist,img, thumbsize,fillc)
+    img.save(jpeg, quality=100)
 
-def drawnode(draw,clust,x,y,scaling,imlist,img):
+def drawnode(draw,clust,x,y,scaling,imlist,img, thumbsize, fillc):
     if clust.id<0:
-        h1=getheight(clust.left)*20
-        h2=getheight(clust.right)*20
+        h1=getheight(clust.left)*thumbsize
+        h2=getheight(clust.right)*thumbsize
         top=y-(h1+h2)/2
         bottom=y+(h1+h2)/2
         # Line length
         ll=clust.distance*scaling
         # Vertical line from this cluster to children    
-        draw.line((x,top+h1/2,x,bottom-h2/2),fill=(255,0,0))    
+        draw.line((x,top+h1/2,x,bottom-h2/2),fill=fillc)    
         
         # Horizontal line to left item
-        draw.line((x,top+h1/2,x+ll,top+h1/2),fill=(255,0,0))    
+        draw.line((x,top+h1/2,x+ll,top+h1/2),fill=fillc)    
         
         # Horizontal line to right item
-        draw.line((x,bottom-h2/2,x+ll,bottom-h2/2),fill=(255,0,0))        
+        draw.line((x,bottom-h2/2,x+ll,bottom-h2/2),fill=fillc)        
         
         # Call the function to draw the left and right nodes    
-        drawnode(draw,clust.left,x+ll,top+h1/2,scaling,imlist,img)
-        drawnode(draw,clust.right,x+ll,bottom-h2/2,scaling,imlist,img)
+        drawnode(draw,clust.left,x+ll,top+h1/2,scaling,imlist,img,thumbsize,fillc)
+        drawnode(draw,clust.right,x+ll,bottom-h2/2,scaling,imlist,img,thumbsize,fillc)
     else:   
         # If this is an endpoint, draw a thumbnail image
         nodeim = Image.open(imlist[clust.id])
-        nodeim.thumbnail((20,20))
+        nodeim.thumbnail((thumbsize,thumbsize))
         ns = nodeim.size
-        img.paste(nodeim,(x,y-ns[1]//2,x+ns[0],y+ns[1]-ns[1]//2))
+        img.paste(nodeim,(int(x),int(y-ns[1]//2),int(x+ns[0]),int(y+ns[1]-ns[1]//2)))
