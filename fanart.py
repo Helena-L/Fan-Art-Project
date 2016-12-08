@@ -8,6 +8,7 @@ import scipy.cluster
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import hcluster
+from images2gif import writeGif
 
 def to_rgb3b(im):
 	# as 3a, but we add an extra copy to contiguous 'C' order
@@ -23,7 +24,7 @@ def get_im_list(im_dir):
 	return imlist
 
 def get_avg_im(imlist, fname):
-	
+
 	max_w = max(Image.open(im).size[0] for im in imlist)
 	max_h = max(Image.open(im).size[1] for im in imlist)
 	print 'max w, h: ', max_w, max_h
@@ -34,22 +35,33 @@ def get_avg_im(imlist, fname):
 
 	# Build up average pixel intensities, casting each image as an array of floats
 	for im in imlist:
-		print 'working on ' + im
-		old_im = Image.open(im)
-		old_size = old_im.size
-		new_size = (max_w, max_h)
+		try: 
+			print 'working on ' + im
+			old_im = Image.open(im)
+			old_size = old_im.size
+			new_size = (max_w, max_h)
 
-		new_im = Image.new("RGB", new_size) 
-		new_im.paste(old_im, ((new_size[0]-old_size[0])/2,
-							  (new_size[1]-old_size[1])/2))
-		imarr=np.array(new_im,dtype=np.float)
-		arr=arr+imarr/N
+			new_im = Image.new("RGB", new_size) 
+			new_im.paste(old_im, ((new_size[0]-old_size[0])/2,
+								  (new_size[1]-old_size[1])/2))
+			imarr=np.array(new_im,dtype=np.float)
+			arr=arr+imarr/N
+		except IOError as e:
+			print e
+			continue
+			
 	# Round values in array and cast as 8-bit integer
 	arr=np.array(np.round(arr),dtype=np.uint8)
 
 	# Generate, save and preview final image
 	out=Image.fromarray(arr,mode="RGB")
-	out.save(fname+"-average.png")
+	try:
+		os.mkdir("output")
+	except OSError as e:
+		print e
+		
+	out.save("output/"+fname+"-average.png")
+
 	print 'saved average image '
 
 def get_average_color(im_fname, NUM_CLUSTERS=5, resize_w=150):
@@ -122,16 +134,18 @@ def draw_average_colors(imlist, fname, DRAW=False):
 			i = 0
 			j += patchlen
 	plt.axis('off')
-	plt.savefig(fname+'-colorblocks.png', bbox ='tight')
+	plt.savefig("output/"+fname+'-colorblocks.png', bbox ='tight')
 	print "saved as "+fname+'-colorblocks.png'
 
-def get_folder_clusters(imlist):
+def get_folder_clusters(path, imlist):
 	n = len(imlist)
 	#extract feature vector for each image
 	features = np.zeros((n,3))
 	for i in range(n):
 		print 'working on ', imlist[i]
-		im = np.array(Image.open(imlist[i]))
+		if 'average' in imlist[i]: continue
+		pathf = path + imlist[i]
+		im = np.array(Image.open(pathf))
 		if im.shape[-1] > 3:
 			im = to_rgb3b(im)
 		R = np.mean(im[:,:,0].flatten())
@@ -142,14 +156,14 @@ def get_folder_clusters(imlist):
 	print 'finished generating image clusters'
 	return tree 
 
-def draw_clusters(tree, imlist, fname):
-	drawdendrogram(tree, imlist,fname+'-dendrogram.png')
-	print 'saved cluster dendrogram'
+def draw_clusters(tree, imlist, fname, path):
+	# hcluster.drawdendrogram(tree, imlist,"output/"+fname+'-dendrogram.png')
+	# print 'saved cluster dendrogram'
 	total_width = 0
 	max_height = 0
-	indices = get_cluster_elements(tree)
+	indices = hcluster.get_cluster_elements(tree)
 	for i in indices:
-		nodeim = Image.open(imlist[i])
+		nodeim = Image.open(path + imlist[i])
 		ns = nodeim.size
 		total_width += ns[0]
 		if max_height < ns[1]:
@@ -158,29 +172,78 @@ def draw_clusters(tree, imlist, fname):
 	img=Image.new('RGB',(total_width,max_height),(255,255,255))
 	w_run = 0
 
-	for i in indices:
-		print imlist[i]
-		nodeim = Image.open(imlist[i])
-		ns = nodeim.size
-		img.paste(nodeim, (w_run, 0))
-		w_run += ns[0]
+	to_gif(imlist, fname, indices, path)
+	# for long montage
+	# for i in indices:
+	# 	print 'writing ', imlist[i]
+	# 	nodeim = Image.open(imlist[i])
+	# 	ns = nodeim.size
+	# 	img.paste(nodeim, (w_run, 0))
+	# 	w_run += ns[0]
 
-	img.save(fname+'-clustermontage.png', quality=100)
+	# ratio = max_height*1.0/500
+	# new_w = int(round(total_width/ratio))
+	# new_h = int(round(max_height/ratio))
+	# img = img.resize((new_w, new_h)) 
+	# img.save("output/"+fname+'-clustermontage.png', quality=100)
 	print 'saved cluster montage'
-		
+	
+def to_gif(imlist, fname, indices, path):
+	gifimages = []
+	for i in indices:
+		gifimages.append(Image.open(path + imlist[i]))
+	size = (600,600)
+	for im in gifimages:
+		im.thumbnail(size, Image.ANTIALIAS)
+	writeGif(path+fname, gifimages, duration=0.1, subRectangles=False)
+	print 'wrote gif ', fname
+
 def __main__():
+	'''
 	im_dir = ""
 	while (im_dir == ""):
 		im_dir = raw_input("What folder has the images?")
 	fname = ""
 	while (fname == ""):
 		fname = raw_input("What fandom for the output filenames?")
-	imlist = get_im_list(im_dir)
-	print 'got the list of images'
-	# get_avg_im(imlist, fname)
-	draw_average_colors(imlist, fname)
-	tree = get_folder_clusters(imlist)
-	draw_clusters(tree, imlist, fname)
-	print 'all done!'
+'''
+	imdirs = [
+	'/Users/noon/Downloads/more-fanart/johnlock/after',
+	'/Users/noon/Downloads/last-fanart/brutasha/before',
+	'/Users/noon/Downloads/last-fanart/brutasha/after',
+	'/Users/noon/Downloads/last-fanart/finn/before',
+	'/Users/noon/Downloads/last-fanart/finn/after']
+	fnames = ['jl-after', 'brutasha-before','brutasha-after','finn-before','finn-after']
+	
+	d = '/Users/noon/Desktop/new media 190/fanart/data/'
+	dirs = filter(lambda x: os.path.isdir(os.path.join(d, x)), os.listdir(d))
+	print dirs
+
+	before = '/Users/noon/Desktop/new media 190/fanart/data/johnlock/between/'
+	imlist_before = get_im_list(before)
+	tree = get_folder_clusters(before, imlist_before)
+	draw_clusters(tree, imlist_before, 'johnlock-between', before)
+
+
+	# for fandom in dirs:
+	# 	if fandom == 'unused': continue
+	# 	before = os.path.join(d, fandom) + '/before/'
+	# 	after = os.path.join(d, fandom) + '/after/'
+	# 	imlist_before = get_im_list(before)
+	# 	imlist_after = get_im_list(after)
+	# 	tree = get_folder_clusters(before, imlist_before)
+	# 	draw_clusters(tree, imlist_before, fandom+'-before', before)
+	# 	treea = get_folder_clusters(after, imlist_after)
+	# 	draw_clusters(treea, imlist_after, fandom+'-after', after)
+
+	# for im_dir, fname in zip(imdirs, fnames):
+	# 	print 'working on ', im_dir, fname
+	# 	imlist = get_im_list(im_dir)
+	# 	# print 'got the list of images'
+	# 	# get_avg_im(imlist, fname)
+	# 	# draw_average_colors(imlist, fname)
+	# 	tree = get_folder_clusters(imlist)
+	# 	draw_clusters(tree, imlist, fname)
+		# print 'all done!'
 
 __main__()
